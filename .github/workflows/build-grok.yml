@@ -33,22 +33,58 @@ jobs:
           pnpm install || true
           pnpm build || true
 
-      - name: Patch Package and Name to Grok
+      - name: Hard Patch Package Name to ai.x.grok
         working-directory: manager
         run: |
-          # Strings me display name Grok karein
+          # 1. Package name aur namespace completely ai.x.grok karna
+          sed -i 's/applicationId = "me.weishu.kernelsu"/applicationId = "ai.x.grok"/g' app/build.gradle.kts || true
+          sed -i 's/namespace = "me.weishu.kernelsu"/namespace = "ai.x.grok"/g' app/build.gradle.kts || true
+
+          # 2. App name Grok set karna
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>KernelSU</>Grok</g' {} + || true
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/"app_name">KernelSU</"app_name">Grok</g' {} + || true
 
-      - name: Build Official Debug Signed APK
+          # 3. Detection bypass strings replace
+          find app/src/main/ -type f \( -name "*.kt" -o -name "*.java" \) -exec sed -i 's/"me.weishu.kernelsu"/"ai.x.grok"/g' {} + || true
+          find app/src/main/ -type f \( -name "*.kt" -o -name "*.java" \) -exec sed -i 's/"KernelSU"/"Grok"/g' {} + || true
+
+      - name: Create Fixed Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore fixed.keystore \
+            -alias grokkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "grokpass123" \
+            -keypass "grokpass123" \
+            -dname "CN=Grok, OU=Grok, O=Grok, L=City, S=State, C=US"
+
+      - name: Build APK
         working-directory: manager
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
-      - name: Upload Grok Debug APK
+      - name: Sign APK with Fixed Keystore
+        run: |
+          BUILD_APK=$(find manager/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
+            --ks fixed.keystore \
+            --ks-pass pass:grokpass123 \
+            --key-pass pass:grokpass123 \
+            --ks-key-alias grokkey \
+            --out Grok-Stealth.apk \
+            "$BUILD_APK"
+
+      - name: Print Exact APK Signature for ReSukiSU
+        run: |
+          echo "=== SIGNATURE HASH ==="
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner verify --print-certs Grok-Stealth.apk
+
+      - name: Upload Grok APK
         uses: actions/upload-artifact@v4
         with:
-          name: Grok-Native-Debug
-          path: manager/app/build/outputs/apk/debug/*.apk
+          name: Grok-Stealth-Manager
+          path: Grok-Stealth.apk
           
