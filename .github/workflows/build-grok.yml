@@ -1,4 +1,4 @@
-name: Build Grok ReSukiSU Manager
+name: Build Grok ReSukiSU Native
 
 on:
   workflow_dispatch:
@@ -33,54 +33,22 @@ jobs:
           pnpm install || true
           pnpm build || true
 
-      - name: Hard Patch Package Name & App Name
+      - name: Patch Package and Name to Grok
         working-directory: manager
         run: |
-          # 1. App name ko Grok par force replace karna
+          # Strings me display name Grok karein
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>KernelSU</>Grok</g' {} + || true
+          find app/src/main/res/ -name "strings.xml" -exec sed -i 's/"app_name">KernelSU</"app_name">Grok</g' {} + || true
 
-          # 2. Package namespace aur applicationId ko ai.x.grok karna
-          sed -i 's/defaultConfig {/defaultConfig {\n        applicationId = "ai.x.grok"/g' app/build.gradle.kts || true
-          sed -i 's/applicationId = "me.weishu.kernelsu"/applicationId = "ai.x.grok"/g' app/build.gradle.kts || true
-
-          # 3. AndroidManifest strings replace karna
-          find app/src/main/ -name "AndroidManifest.xml" -exec sed -i 's/me.weishu.kernelsu/ai.x.grok/g' {} + || true
-
-      - name: Create Fixed Keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore fixed.keystore \
-            -alias grokkey \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "grokpass123" \
-            -keypass "grokpass123" \
-            -dname "CN=Grok, OU=Grok, O=Grok, L=City, S=State, C=US"
-
-      - name: Build Grok Manager Release APK
+      - name: Build Official Debug Signed APK
         working-directory: manager
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease \
-            -PKSU_PACKAGE_NAME="ai.x.grok" \
-            -PKSU_NAME="Grok" \
-            --stacktrace
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Sign APK with Fixed Key
-        run: |
-          BUILD_APK=$(find manager/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
-          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
-            --ks fixed.keystore \
-            --ks-pass pass:grokpass123 \
-            --key-pass pass:grokpass123 \
-            --ks-key-alias grokkey \
-            --out Grok-Fixed-Release.apk \
-            "$BUILD_APK"
-
-      - name: Upload Grok APK
+      - name: Upload Grok Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Grok-Manager-Final
-          path: Grok-Fixed-Release.apk
+          name: Grok-Native-Debug
+          path: manager/app/build/outputs/apk/debug/*.apk
           
