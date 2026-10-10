@@ -33,6 +33,20 @@ jobs:
           pnpm install || true
           pnpm build || true
 
+      - name: Hard Patch Branding & Package (Grok)
+        working-directory: manager
+        run: |
+          # 1. Package name ko ai.x.grok set karna
+          find app/ -type f -name "build.gradle.kts" -exec sed -i 's/applicationId = ".*"/applicationId = "ai.x.grok"/g' {} + || true
+          find app/ -type f -name "AndroidManifest.xml" -exec sed -i 's/package=".*"/package="ai.x.grok"/g' {} + || true
+
+          # 2. App ka display name change karke Grok karna
+          find app/src/main/res/ -type f -name "strings.xml" -exec sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">Grok<\/string>/g' {} + || true
+
+          # 3. Source code me package traces rename karna
+          find app/src/main/ -type f \( -name "*.kt" -o -name "*.java" \) -exec sed -i 's/"me.weishu.kernelsu"/"ai.x.grok"/g' {} + || true
+          find app/src/main/ -type f \( -name "*.kt" -o -name "*.java" \) -exec sed -i 's/"KernelSU"/"Grok"/g' {} + || true
+
       - name: Create Fixed Keystore
         run: |
           keytool -genkeypair -v \
@@ -49,10 +63,7 @@ jobs:
         working-directory: manager
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease \
-            -PKSU_PACKAGE_NAME="ai.x.grok" \
-            -PKSU_NAME="Grok" \
-            --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
       - name: Sign APK with Fixed Key
         run: |
@@ -65,9 +76,14 @@ jobs:
             --out Grok-Fixed-Release.apk \
             "$BUILD_APK"
 
+      - name: Print Signature Details for ReSukiSU
+        run: |
+          echo "=== SIGNATURE DETAILS ==="
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner verify --print-certs Grok-Fixed-Release.apk
+
       - name: Upload Grok APK
         uses: actions/upload-artifact@v4
         with:
-          name: Grok-Fixed-Manager
+          name: Grok-Manager-Final
           path: Grok-Fixed-Release.apk
           
