@@ -1,0 +1,73 @@
+name: Build Grok ReSukiSU Manager
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ReSukiSU Code
+        uses: actions/checkout@v4
+        with:
+          repository: 'rsuntk/KernelSU'
+          ref: 'main'
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      - name: Build WebUI
+        working-directory: manager
+        run: |
+          npm install -g pnpm
+          pnpm install || true
+          pnpm build || true
+
+      - name: Create Fixed Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore fixed.keystore \
+            -alias grokkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "grokpass123" \
+            -keypass "grokpass123" \
+            -dname "CN=Grok, OU=Grok, O=Grok, L=City, S=State, C=US"
+
+      - name: Build Grok Manager Release APK
+        working-directory: manager
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -PKSU_PACKAGE_NAME="ai.x.grok" \
+            -PKSU_NAME="Grok" \
+            --stacktrace
+
+      - name: Sign APK with Fixed Key
+        run: |
+          BUILD_APK=$(find manager/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
+            --ks fixed.keystore \
+            --ks-pass pass:grokpass123 \
+            --key-pass pass:grokpass123 \
+            --ks-key-alias grokkey \
+            --out Grok-Fixed-Release.apk \
+            "$BUILD_APK"
+
+      - name: Upload Grok APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grok-Fixed-Manager
+          path: Grok-Fixed-Release.apk
+          
