@@ -1,4 +1,4 @@
-name: Build Grok ReSukiSU Native
+name: Build Grok with MyJio Config
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout ReSukiSU Code
+      - name: Checkout ReSukiSU Source
         uses: actions/checkout@v4
         with:
           repository: 'rsuntk/KernelSU'
@@ -33,25 +33,56 @@ jobs:
           pnpm install || true
           pnpm build || true
 
-      - name: Patch Package & Screen Identity to Grok
+      - name: Patch Package Name and Display Labels
         working-directory: manager
         run: |
-          # 1. Package Name ko applicationId ke zariye ai.x.grok karna
+          # 1. Package Name ko ai.x.grok karna
           sed -i 's/applicationId = "me.weishu.kernelsu"/applicationId = "ai.x.grok"/g' app/build.gradle.kts || true
           
-          # 2. Sare strings.xml me app label ko Grok karna taaki Screen Time me KernelSU na dikhe
+          # 2. Display Name ko Grok karna
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>KernelSU</>Grok</g' {} + || true
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/"app_name">.*</"app_name">Grok</g' {} + || true
 
-      - name: Build Grok Debug APK
+      - name: Generate Key with Exact My Jio Identity
+        run: |
+          keytool -genkeypair -v \
+            -keystore myjio_clone.keystore \
+            -alias jioalias \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "grokpass123" \
+            -keypass "grokpass123" \
+            -dname "CN=My Jio, OU=My Jio, O=My Jio, L=Mumbai, ST=Maharashtra, C=IN"
+
+      - name: Build APK
         working-directory: manager
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
-      - name: Upload Grok APK
+      - name: Sign APK with V2 Scheme
+        run: |
+          SRC_APK=$(find manager/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
+            --ks myjio_clone.keystore \
+            --ks-pass pass:grokpass123 \
+            --key-pass pass:grokpass123 \
+            --ks-key-alias jioalias \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --out Grok-Custom.apk \
+            "$SRC_APK"
+
+      - name: Output Signature Details
+        run: |
+          echo "=== APK SIGNATURE DETAILS ==="
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner verify --print-certs Grok-Custom.apk
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Grok-ScreenTime-Clean
-          path: manager/app/build/outputs/apk/debug/*.apk
+          name: Grok-Manager-APK
+          path: Grok-Custom.apk
           
